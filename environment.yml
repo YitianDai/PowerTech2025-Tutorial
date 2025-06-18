@@ -13,6 +13,5 @@ dependencies:
   - geopandas==1.1.0
   - imageio==2.37.0
   - Cartopy==0.24.1
-  - pip:
-    - pandapower
+  - pandapower==2.13.1
 
