@@ -1,4 +1,4 @@
-# Assessing Resilience in Modern Energy Systems – PowerTech Tutorial 2025
+# Assessing Resilience in Modern Energy Systems – A Tutorial
 
 ## Overview 📋
 
@@ -18,30 +18,42 @@ This hands-on tutorial provides a complete workflow for assessing the resilience
 
 ## Getting Started 🛠️
 
-### ✅ Recommended Platform: Local Jupyter Environment
+### ✅ Recommended Platform: [Binder](https://mybinder.org/)
 
-This tutorial is designed to be run in a local environment using Jupyter Notebook or JupyterLab.
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/YitianDai/PowerTech2025-Tutorial.git/master)
+
+This tutorial is designed to be run in a live, interactive environment using Binder, which requires no local installation. Binder uses the `environment.yml` file in this repository to build the environment.
+
+#### Running the Notebooks with Binder
+
+1.  Click the **"Launch Binder"** badge above.
+2.  Binder will build the necessary environment. This may take a few minutes on the first launch.
+3.  Once ready, a Jupyter interface will open in your browser.
+4.  Open the notebooks in the following order, starting with `SE01`.
+
+### Alternative: Local Jupyter Environment
+
+If you prefer to run the notebooks locally:
 
 #### What You Need
-
+* A `conda` installation (e.g., Anaconda or Miniconda).
 * Python 3.8+
-* An environment manager like `conda` or `venv`.
 
-#### Running the Notebooks
-
+#### Local Setup
 1.  Clone or download this repository.
 2.  Navigate to the project directory in your terminal.
-3.  Create a new virtual environment (recommended).
-4.  Install the required dependencies by running:
+3.  Create the conda environment from the `environment.yml` file:
     ```bash
-    pip install -r requirements.txt
+    conda env create -f environment.yml
+    ```
+4.  Activate the newly created environment:
+    ```bash
+    conda activate resilience_assessment
     ```
 5.  Start Jupyter Notebook or JupyterLab:
     ```bash
     jupyter notebook
     ```
-6.  Open the notebooks in the following order, starting with `SE01`.
-
 
 ---
 
@@ -69,8 +81,6 @@ By the end of this tutorial, you’ll be able to:
 
 ---
 
----
-
 ## Prerequisites 📾
 
 * Basic Python programming skills.
@@ -89,5 +99,3 @@ More information about the models and some of their applications can be found at
 * National Grid Electricity Transmission, “[Forward Resilience Measures](https://smarter.energynetworks.org/projects/nia_ngt0049/),” 2021.
 * Birchfield, A.B., et al., "[Grid Structural Characteristics as Validation Criteria for Synthetic Networks](https://ieeexplore.ieee.org/document/7725528)," *IEEE Transactions on Power Systems*, 2017.
 * [ACTIVSg2000 network dataset](https://electricgrids.engr.tamu.edu/electric-grid-test-cases/activsg2000/).
-
-
