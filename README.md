@@ -1,4 +1,4 @@
-# Assessing Resilience in Modern Energy Systems – A Tutorial
+# Assessing Resilience in Modern Energy Systems – PowerTech Tutorial 2025
 
 ## Overview 📋
 
@@ -18,9 +18,7 @@ This hands-on tutorial provides a complete workflow for assessing the resilience
 
 ## Getting Started 🛠️
 
-### ✅ Recommended Platform: [Binder](https://mybinder.org/)
-
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/YitianDai/PowerTech2025-Tutorial.git/master)
+### ✅ Recommended Platform: [Binder](https://mybinder.org/) [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/YitianDai/PowerTech2025-Tutorial.git/master)
 
 This tutorial is designed to be run in a live, interactive environment using Binder, which requires no local installation. Binder uses the `environment.yml` file in this repository to build the environment.
 
@@ -36,7 +34,7 @@ This tutorial is designed to be run in a live, interactive environment using Bin
 If you prefer to run the notebooks locally:
 
 #### What You Need
-* A `conda` installation (e.g., Anaconda or Miniconda).
+* A `conda` installation
 * Python 3.8+
 
 #### Local Setup
