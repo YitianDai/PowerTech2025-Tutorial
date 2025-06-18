@@ -7,6 +7,9 @@ can impact a power system
 
 @author: Eduardo Alejandro Martinez Cesena
 https://www.researchgate.net/profile/Eduardo_Alejandro_Martinez_Cesena
+
+@author: Yitian Dai
+https://www.researchgate.net/profile/Yitian-Dai-2
 """
 import math
 import random
@@ -44,15 +47,15 @@ class WindConfig:
 
         # WindStorms: Contour points
         self.data.W.contour = Object()
-        self.data.W.contour.lon = [-2.0, -3.3, -3.3, -4.8, -4.8, -3.2, -2.2,
-                                   -5.4, -3.2, -5.4, -5.4, 0.4]  # Longitude
-        self.data.W.contour.lat = [55.8, 55.0, 53.5, 53.5, 52.8, 52.8, 52.1,
-                                   51.8, 51.3, 50.6, 49.9, 50.4]  # Latitude
+        self.data.W.contour.lon = [-95.5, -94.5, -94.5, -93.7, -94.9, -94.1, 
+                                    -96, -96.6, -97.2, -98.8]  # Longitude
+        self.data.W.contour.lat = [34.2, 33.5, 33.1, 31.2, 30.8, 29.6, 28.2, 
+                                    27.1, 25.5, 26]  # Latitude
         self.data.W.contour.from_to = \
             [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9],
-             [9, 10], [10, 11], [11, 12]]  # Connectivity
-        self.data.W.contour.dlon = [-1.5, 2.1]  # End points (longitude)
-        self.data.W.contour.dlat = [-17/18, 54.183333]  # End points (latitude)
+             [9, 10]]  # Connectivity
+        self.data.W.contour.dlon = [-104, -102.1]  # End points (longitude)
+        self.data.W.contour.dlat = [31.6, 35.45]  # End points (latitude)
 
         # Fragility curve settings
         self.data.frg = Object()
@@ -371,7 +374,8 @@ class WindClass:
         for i in range(NumWS):
             Lon_n[i] = cp_lon_n[1] - \
                 Rnd_direction[i]*(cp_lon_n[1] - cp_lon_n[0])
-            Lat_n[i] = Lon_n[i]*cp_lat_n[0] + cp_lat_n[1]
+            Lat_n[i] = cp_lat_n[1] - \
+                Rnd_direction[i]*(cp_lat_n[1] - cp_lat_n[0])
 
         return Lon, Lat, Lon_n, Lat_n
     
@@ -391,18 +395,19 @@ class WindClass:
         cs = CubicSpline([Lon1, Lon2], [Lat1, Lat2], bc_type=((1, 0), (1, 0)))
         return cs
 
-    def _crt_ws_path(self, Lon1, Lat1, Lon2, Lat2, Num_hrs):
+    def _crt_ws_path(self, Lon1, Lat1, Lon2, Lat2, ws_v, Num_hrs):
         '''Create the propagation path of a windstorm on an hourly basis'''
         # trajectory of windstorm
         dir_lon = self.linear_interpolate(Lon1, Lon2, Num_hrs + 1)
         cs = self.cubic_interpolate(Lon1, Lat1, Lon2, Lat2)
         dir_lat = cs(dir_lon)
+        ws_v_hr = self.linear_interpolate(ws_v, 17, Num_hrs + 1)
 
         path_ws = [[0, 0] for _ in range(Num_hrs + 1)]
         path_ws[0] = [Lon1, Lat1]
 
         for hr in range(1, Num_hrs + 1):
-            dist_hr = 24000 - 8000 * (hr - 1) / Num_hrs
+            dist_hr =  ws_v_hr[hr-1]*1000
             brg_hr = self._getBearing(dir_lon[hr - 1], dir_lat[hr - 1], dir_lon[hr], dir_lat[hr])
             path_ws[hr] = self._getDestination(path_ws[hr - 1][0], path_ws[hr - 1][1], brg_hr, dist_hr)
         
@@ -467,64 +472,76 @@ class WindClass:
         return evlp_pts
 
     def _compare_envelope(self, evlp, gis_bgn, gis_end, Num_bch):
-        '''Identify groups of lines that are within the envelope'''
+        """
+        Identify which lines are within the envelope.
+
+        evlp: ndarray, shape (4, 2) -- envelope (polygon) vertices (longitude, latitude)
+        gis_bgn: ndarray, shape (Num_bch, 2) -- 'from' node coordinates for each branch
+        gis_end: ndarray, shape (Num_bch, 2) -- 'to' node coordinates for each branch
+        Num_bch: int, number of branches
+
+        Returns: flgs (boolean array of shape (Num_bch,)), True if line is within the envelope
+        """
 
         # Assumed sequence
         evlp_sequence = [0, 2, 3, 1, 0]
-        evlp = np.array(evlp)
+        evlp = np.array(evlp)  
+        gis_bgn = np.array(gis_bgn)  # <--- Add this
+        gis_end = np.array(gis_end)  # <--- Add this
+        X = evlp[evlp_sequence, 0].copy()
+        Y = evlp[evlp_sequence, 1].copy()
 
-        x = evlp[evlp_sequence, 0]
-        y = evlp[evlp_sequence, 1]
+        aux = np.column_stack([np.arange(1, 5), np.arange(0, 4)])
+        for x1 in np.where(X[1:5] - X[0:4] == 0)[0]:
+            X[aux[x1, 0]] -= 1e-6
+            X[aux[x1, 1]] += 1e-6
 
-        # Get line equations and angle between lines
-        aux = np.array([[1, 0], [2, 1], [3, 2], [4, 3]])
-        for i in np.where(x[1:] == x[:-1])[0]:
-            x[aux[i, 0]] -= 0.000001
-            x[aux[i, 1]] += 0.000001
-        
-        for i in np.where(y[1:] == x[:-1])[0]:
-            y[aux[i, 0]] -= 0.000001
-            y[aux[i, 1]] += 0.000001
-        
-        b = (y[1:] - y[:-1]) / (x[1:] - x[:-1])
-        a = y[:-1] - b * x[:-1]
+        aux = np.column_stack([np.arange(1, 5), np.arange(0, 4)])
+        for x1 in np.where(Y[1:5] - X[0:4] == 0)[0]:
+            Y[aux[x1, 0]] -= 1e-6
+            Y[aux[x1, 1]] += 1e-6
 
-        # XY range of each line
-        aux1 = np.column_stack((x, np.roll(x, -1)))
-        aux2 = np.column_stack((y, np.roll(y, -1)))
-        xy_range = np.column_stack((np.min(aux1, axis=1), np.max(aux1, axis=1), np.min(aux2, axis=1), np.max(aux2, axis=1)))
-        
+        B = (Y[1:5] - Y[0:4]) / (X[1:5] - X[0:4])
+        A = Y[0:4] - B * X[0:4]
+
+        aux1 = np.column_stack((X, np.roll(X, -1)))
+        aux2 = np.column_stack((Y, np.roll(Y, -1)))
+        xy_range = np.column_stack((np.min(aux1, axis=1), np.max(aux1, axis=1),
+                                    np.min(aux2, axis=1), np.max(aux2, axis=1)))
+
         flgs = np.zeros(Num_bch, dtype=bool)
         for i in range(Num_bch):
-            flgs[i] = self._compare_envelope_line(xy_range, a, b, gis_bgn[i], gis_end[i])
-        
+            flgs[i] = self._compare_envelope_line(xy_range, A, B, gis_bgn[i], gis_end[i])
         return flgs
     
     def _compare_envelope_line(self, xy_range, a, b, bgn, end):
-        '''Auxiliary function to identify if a line is within an envelope'''
+        """
+        Check if a single line (from bgn to end) is within or crosses the envelope.
+        xy_range: (4,4) [xmin, xmax, ymin, ymax] for each polygon edge
+        a, b: arrays (4,) -- polygon edge coefficients (y = b*x + a)
+        bgn, end: arrays (2,) -- [x, y] of start and end of the line
+        Returns: True if the line is inside/intersects envelope, False otherwise.
+        """
+        # Line coefficients: y = d*x + c
+        if end[0] == bgn[0]:
+            d = 1e10   # avoid divide by zero
+            c = (end[1] + bgn[1]) / 2
+        else:
+            d = (end[1] - bgn[1]) / (end[0] - bgn[0])
+            c = end[1] - d * end[0]
 
-        bgn = list(bgn)
-        end = list(end)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            x = (a - c) / (d - b)
+            y = a + b * x
 
-        # Adjusting values to avoid division by zero
-        if end[0]==bgn[0]:
-            end[0] = end[0] +0.00001
-            bgn[0] = bgn[0] -0.00001
-
-        d = (end[1]-bgn[1]) / (end[0]-bgn[0])
-        c = end[1] - d * end[0]
-        
-        # Intersection points
-        x = (a - c) / (d - b)
-        y = a + b * x
-        
         flg = np.zeros((6, 4))
-        xy_line_range = [np.min([bgn[0], end[0]]),  # Min longitude
-                        np.max([bgn[0], end[0]]),  # Max longitude
-                        np.min([bgn[1], end[1]]),  # Min latitude
-                        np.max([bgn[1], end[1]])]   # Max latitude
-        
+        xy_line_range = [
+            min(bgn[0], end[0]), max(bgn[0], end[0]),
+            min(bgn[1], end[1]), max(bgn[1], end[1])
+        ]
+
         for i in range(4):
+            # X in envelope edge range
             if xy_range[i, 0] <= x[i] <= xy_range[i, 1]:
                 flg[2, i] = 1
                 if xy_line_range[0] <= x[i] <= xy_line_range[1]:
@@ -533,7 +550,7 @@ class WindClass:
                     flg[4, i] = 1
                 elif x[i] <= xy_line_range[0]:
                     flg[4, i] = -1
-                    
+            # Y in envelope edge range
             if xy_range[i, 2] <= y[i] <= xy_range[i, 3]:
                 flg[3, i] = 1
                 if xy_line_range[2] <= y[i] <= xy_line_range[3]:
@@ -542,18 +559,20 @@ class WindClass:
                     flg[5, i] = 1
                 elif y[i] <= xy_line_range[2]:
                     flg[5, i] = -1
-        
-            in_out = False
-            if np.sum(flg[0:2, :]) > 0:
+
+        in_out = False
+        if np.sum(flg[0:2, :]) > 0:
+            in_out = True
+        elif np.sum(flg[2, :]) > 0:
+            test = flg[4, flg[2, :] == 1]
+            if len(test) > 0 and np.min(test) == -1 and np.max(test) == 1:
                 in_out = True
-            elif np.sum(flg[2, :]) > 0:
-                if np.min(flg[4, flg[2, :] == 1]) == -1 and np.max(flg[4, flg[2, :] == 1]) == 1:
-                    in_out = True
-            elif np.sum(flg[4, :]) > 0:
-                if np.min(flg[5, flg[3, :] == 1]) == -1 and np.max(flg[5, flg[3, :] == 1]) == 1:
-                    in_out = True
-                    
-            return in_out
+        elif np.sum(flg[4, :]) > 0:
+            test = flg[5, flg[3, :] == 1]
+            if len(test) > 0 and np.min(test) == -1 and np.max(test) == 1:
+                in_out = True
+
+        return in_out
 
     def _fragility_curve(self, hzd_int):
         '''Calculate the probability of failure based on a fragility curve'''
@@ -617,90 +636,186 @@ class WindClass:
         ax.set_aspect('equal')
         plot.draw_collections(collections_to_draw, ax=ax)
         plt.show()
-    
-    def _ws_animation(self, net, evlp_total, affected_total, failed_total, Num_hrs, path_ws):
 
+    def plot_base(self, ax, net, line_color="blue", bus_color="black"):
+        import geopandas as gpd
+        import os
+        # Load map
+        states = gpd.read_file(os.path.join(os.getcwd(), "Inputs/cb_2020_us_state_20m/cb_2020_us_state_20m.shp")).to_crs(epsg=4326)
+        texas = states[states.STUSPS == "TX"]
+        roi = states.cx[-110:-90, 25:40]
+
+        # Plot background
+        roi.plot(ax=ax, facecolor="lightgrey", edgecolor="black")
+        texas.plot(ax=ax, facecolor="whitesmoke", edgecolor="black")
+
+        # Extract lines and bus coords from net
+        lines = net.line[["from_bus", "to_bus"]]
+        bus_coords = net.bus_geodata.set_index(net.bus.index)
+
+        # Plot lines
+        label_line = True
+        for _, row in lines.iterrows():
+            f, t = row["from_bus"], row["to_bus"]
+            if f in bus_coords.index and t in bus_coords.index:
+                x = [bus_coords.at[f, "x"], bus_coords.at[t, "x"]]
+                y = [bus_coords.at[f, "y"], bus_coords.at[t, "y"]]
+                ax.plot(x, y, color=line_color, lw=0.6, alpha=0.7, zorder=2, label="Lines" if label_line else "")
+                label_line = False
+        ax.scatter(bus_coords["x"], bus_coords["y"], color = bus_color, s=3, label="Buses", zorder=3)
+        
+    def ws_animation(self, net, envelopes_rect, affected_idx, failed_total, Num_hrs, path_ws, filename='Windstorm_Progression.gif',fps=1.5):
+        """
+        Animate hourly network impact from windstorm: failed lines (red), affected (orange), others (grey).
+        """
         import matplotlib.pyplot as plt
-        import pandapower.plotting as plot
         import imageio.v2 as imageio
+        import numpy as np
         import os
 
-        plt.ioff() 
-        evlp_items = [item for item in evlp_total]
-        affected_items = [item for item in affected_total]
-        failed_items = [item for item in failed_total]
-        x, y, x1, y1, total_failed = np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
+        plt.ioff()
+        frames = []
+        x_path, y_path = [], []
+        prev_envelopes = []
+        failed_log_by_hour = []
 
-        # Create static collections for buses and lines
-        bc = plot.create_bus_collection(net, buses=net.bus.index, color='black', size=0.02, zorder=1)
-        lc = plot.create_line_collection(net, lines=net.line.index,alpha=0.5, color='grey', zorder=2)
-        collections_to_draw = [lc, bc]
+        # Extract bus and line coordinates for plotting
+        lines = net.line[["from_bus", "to_bus"]]
+        bus_coords = net.bus_geodata.set_index(net.bus.index)
+
+        prev_affected = set()
+        prev_failed = set()
+        prev_envelopes = []
 
         for i in range(Num_hrs):
-            collections_to_draw_now = collections_to_draw.copy()
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(6, 16))
 
-            # Update and plot the path coordinates up to the current hour
-            x1 = np.append(x1, path_ws[i][0])
-            y1 = np.append(y1, path_ws[i][1])
-            ax.plot(x1, y1, 'o',alpha=0.5, color='tab:blue',markerfacecolor='None', markersize=1)
-            
-            # Process affected and failed lines for the current hour
-            current_evlp_array = np.array(evlp_items[i])
-            current_affected_array = np.array(affected_items[i])
-            current_failed_array = np.array(failed_items[i])
-            affected_only_array = [item for item in current_affected_array if item not in total_failed]
-            
-            # Plot the envelope for the current hour
-            evlp_sequence = [0, 2, 3, 1, 0]
-            x = np.append(x, current_evlp_array[evlp_sequence, 0])
-            y = np.append(y, current_evlp_array[evlp_sequence, 1])
-            ax.plot(x,y, '-',alpha=0.5, color = 'tab:blue', linewidth=1, label='Path')
+            self.plot_base(ax, net ,line_color='tab:gray')
 
-            # Create collections for affected and failed lines if they exist
-            if current_affected_array.size > 0 :
-                if current_failed_array.size > 0 :
-                    total_failed = np.append(total_failed, current_failed_array) 
-                    lc1 = plot.create_line_collection(net, lines=affected_only_array, color='#FFCC99')
-                    lc2 = plot.create_line_collection(net, lines=total_failed, color='red')
-                    collections_to_draw.append(lc1)
-                    collections_to_draw.append(lc2)
-                    collections_to_draw_now = collections_to_draw.copy()
-                    lc1_now = plot.create_line_collection(net, lines=affected_only_array, color='orange')
-                    lc2_now = plot.create_line_collection(net, lines=total_failed, color='red')
-                    collections_to_draw_now.append(lc1_now)
-                    collections_to_draw_now.append(lc2_now)
+            # Plot all previous envelopes (faded blue)
+            for evlp in prev_envelopes:
+                if evlp is not None and np.array(evlp).shape == (4, 2):
+                    evlp = np.array(evlp)
+                    evlp_seq = [0, 2, 3, 1, 0]
+                    ax.plot(evlp[evlp_seq, 0], evlp[evlp_seq, 1], '-', color='tab:blue', linewidth=1.5, alpha=0.28, zorder=4)
+
+            # Plot current envelope (highlighted blue)
+            evlp = envelopes_rect[i]
+            if evlp is not None and np.array(evlp).shape == (4, 2):
+                evlp = np.array(evlp)
+                evlp_seq = [0, 2, 3, 1, 0]
+                ax.plot(evlp[evlp_seq, 0], evlp[evlp_seq, 1], '-', color='tab:blue', linewidth=2.5, alpha=0.75, zorder=5)
+                prev_envelopes.append(evlp)
+
+            # Plot storm path up to current hour
+            x_path.append(path_ws[i][0])
+            y_path.append(path_ws[i][1])
+            ax.plot(x_path, y_path, 'o-', color='tab:blue', alpha=0.7, markersize=2, zorder=8, label='Storm Path')
+
+            # Calculate new affected and failed lines
+            curr_failed = set(failed_total[i])
+            new_failed = curr_failed - prev_failed
+            new_failed_list = sorted(list(new_failed))
+            failed_log_by_hour.append(new_failed_list)
+
+            def format_hourly_indices_brackets_multiline(indices, per_line=3):
+                indices = list(indices)
+                if not indices:
+                    return ["[]"]
+                lines = []
+                for i in range(0, len(indices), per_line):
+                    line_content = " ".join(str(idx) for idx in indices[i:i+per_line])
+                    lines.append(f"[{line_content}]")
+                return lines
+            num_hours_to_show = 4
+            start_hour = max(0, i + 1 - num_hours_to_show)
+            hour_logs = []
+            for h in range(start_hour, i + 1):
+                bracket_lines = format_hourly_indices_brackets_multiline(failed_log_by_hour[h], per_line=3)
+                # Print hour label only on the first line for each hour
+                if bracket_lines:
+                    hour_logs.append(f"H{h+1}: {bracket_lines[0]}")
+                    for extra in bracket_lines[1:]:
+                        hour_logs.append(f"       {extra}")
                 else:
-                    lc1 = plot.create_line_collection(net, lines=affected_only_array, color='#FFCC99')
-                    lc2 = plot.create_line_collection(net, lines=total_failed, color='red')
-                    collections_to_draw.append(lc1)
-                    collections_to_draw.append(lc2)
-                    collections_to_draw_now = collections_to_draw.copy()
-                    lc1_now = plot.create_line_collection(net, lines=affected_only_array, color='orange')
-                    lc2_new = plot.create_line_collection(net, lines=total_failed, color='red')
-                    collections_to_draw_now.append(lc1_now)
-                    collections_to_draw_now.append(lc2_now)
+                    hour_logs.append(f"H{h+1}: []")
+            failed_log_text = "Failed cumulative\n" + "\n".join(hour_logs)
 
-            ax.set_aspect('equal')
-            plot.draw_collections(collections_to_draw_now, ax=ax)
-            ax.autoscale_view()
+            curr_affected = set(affected_idx[i])
+            new_affected = curr_affected - prev_failed - new_failed 
+            new_affected_list = sorted(list(new_affected))
             
-            plt.title(f"Hour {i}")
-            plt.savefig(f"hour_{i}.png")
+            
+            # Display as string, show up to 10/20 indices for readability
+            def format_indices(lst, per_line=3):
+            # Convert numbers to strings and group them
+                lines = []
+                for i in range(0, len(lst), per_line):
+                    lines.append("  ".join(str(idx) for idx in lst[i:i+per_line]))
+                return "\n".join(lines)
+
+            max_affected = 12  # or as many as you want to show
+            affected_lines_text = format_indices(new_affected_list[:max_affected], per_line=3)
+            affected_str = f"Affected this hour:\n{affected_lines_text}" + (" ..." if len(new_affected_list) > max_affected else "")
+
+            # Place the text box well into the reserved right area
+            ax.text(1.03, 0.82, affected_str, transform=ax.transAxes, fontsize=10, color='orange',
+                    va='top', ha='left', fontweight='bold', bbox=dict(facecolor='white', alpha=0.75, edgecolor='orange'))
+            ax.text(1.03, 0.52, failed_log_text, transform=ax.transAxes, fontsize=10, color='red',
+                    va='top', ha='left', fontweight='bold', bbox=dict(facecolor='white', alpha=0.75, edgecolor='red'))
+
+            # Plot previously affected lines (faded orange)
+            for idx in prev_affected - prev_failed:
+                f, t = lines.iloc[idx]["from_bus"], lines.iloc[idx]["to_bus"]
+                if f in bus_coords.index and t in bus_coords.index:
+                    ax.plot([bus_coords.at[f, "x"], bus_coords.at[t, "x"]],
+                            [bus_coords.at[f, "y"], bus_coords.at[t, "y"]],
+                            color='orange', lw=2.0, alpha=0.3, zorder=6)
+            # Plot previously failed lines (faded red)
+            for idx in prev_failed:
+                f, t = lines.iloc[idx]["from_bus"], lines.iloc[idx]["to_bus"]
+                if f in bus_coords.index and t in bus_coords.index:
+                    ax.plot([bus_coords.at[f, "x"], bus_coords.at[t, "x"]],
+                            [bus_coords.at[f, "y"], bus_coords.at[t, "y"]],
+                            color='red', lw=2.3, alpha=1, zorder=7)
+            # Plot new affected lines (bright orange)
+            for idx in sorted(list(new_affected)):
+                f, t = lines.iloc[idx]["from_bus"], lines.iloc[idx]["to_bus"]
+                if f in bus_coords.index and t in bus_coords.index:
+                    ax.plot([bus_coords.at[f, "x"], bus_coords.at[t, "x"]],
+                            [bus_coords.at[f, "y"], bus_coords.at[t, "y"]],
+                            color='orange', lw=2.3, alpha=0.9, zorder=10)
+            # Plot new failed lines (bright red)
+            for idx in new_failed:
+                f, t = lines.iloc[idx]["from_bus"], lines.iloc[idx]["to_bus"]
+                if f in bus_coords.index and t in bus_coords.index:
+                    ax.plot([bus_coords.at[f, "x"], bus_coords.at[t, "x"]],
+                            [bus_coords.at[f, "y"], bus_coords.at[t, "y"]],
+                            color='red', lw=2.8, alpha=1, zorder=11)
+
+            ax.set(xlim=(-104, -95), ylim=(27, 34), xlabel="Longitude", ylabel="Latitude")
+            ax.set_aspect('equal')
+            ax.set_title(f"Hour {i+1} | Orange: Newly affected | Red: Newly failed")
+            ax.axis('off')  # Cleaner look
+
+            fname = f"hour_{i+1}_ws.png"
+            fig.savefig(fname, bbox_inches='tight')
             plt.close(fig)
+            frames.append(fname)
 
-        # Create a list of filenames in the order they were saved
-        filenames = [f"hour_{i}.png" for i in range(Num_hrs)]
-        # Compile the images into a GIF
-        with imageio.get_writer('Impact of Windstorm.gif', mode='I', fps=2, loop = 0) as writer:
-            for filename in filenames:
-                image = imageio.imread(filename)
-                writer.append_data(image)
-            for filename in filenames:
-                os.remove(filename)
+            # Only update here, at end of loop
+            prev_affected |= curr_affected
+            prev_failed |= curr_failed
 
+        # Create GIF
+        with imageio.get_writer(filename, mode='I', fps=fps, loop=0) as writer:
+            for fname in frames:
+                writer.append_data(imageio.imread(fname))
+                os.remove(fname)  # Clean up
+
+        # Display in notebook
         from IPython.display import Image, display
-        display(Image(filename='Impact of Windstorm.gif'))
+        display(Image(filename=filename))
 
     def _set_cp_lat_n(self, val):
         '''Set cp_lat_n'''

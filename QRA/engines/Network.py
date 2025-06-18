@@ -7,6 +7,9 @@ The code in Network.py provides the methods required to load and model
 
 @author: Eduardo Alejandro Martinez Cesena
 https://www.researchgate.net/profile/Eduardo_Alejandro_Martinez_Cesena
+
+@author: Yitian Dai
+https://www.researchgate.net/profile/Yitian-Dai-2
 """
 
 import numpy as np
@@ -30,7 +33,7 @@ class NetworkConfig:
         # Location of network file
         self.data.path = os.path.join(os.path.dirname(__file__), '..', '..',
                                       'Inputs')
-        self.data.name = 'GBNetwork_New.xlsx'
+        self.data.name = 'case_ACTIVSg2000.xlsx'
         self.data.load = 'Historical_load.xlsx'
         self.data.DN = 'Distributed_generation.xlsx'
         self.data.line_status = 'LineStatus'
@@ -192,7 +195,10 @@ class NetworkClass:
         return islands
     
     def _MPC_by_Parts(self, net): 
-        
+        """
+        Run DC OPF for each islanded part of the network independently.
+        Returns combined results for all islands.
+        """
         net_opf = net.deepcopy()
 
         islands = self._find_islands(net_opf)
@@ -202,7 +208,7 @@ class NetworkClass:
             npc = net_opf.deepcopy()
 
             bus_indices_to_keep = set(island)
-            all_bus_indices = set(range(len(npc.bus)))
+            all_bus_indices = set(npc.bus.index)
             buses_to_remove = list(all_bus_indices - bus_indices_to_keep)
             pp.drop_buses(npc, buses_to_remove)
 
@@ -210,7 +216,7 @@ class NetworkClass:
                 # Check if there is any slack bus in the network
                 if len(npc.ext_grid) == 0:
                     slack_bus_idx = npc.sgen.iloc[0]['bus']
-                    pp.create_ext_grid(npc, bus=slack_bus_idx, vm_pu=1.0, name="Slack Bus", max_p_mw=0)
+                    pp.create_ext_grid(npc, bus=slack_bus_idx, vm_pu=1.0, name="Slack Bus", max_p_mw=npc.sgen.iloc[0]['max_p_mw'])
 
                 try:
                     pp.rundcopp(npc, verbose=False)
@@ -226,6 +232,10 @@ class NetworkClass:
         return results
 
     def _add_virtual_gen(self, net):
+        """
+        Add virtual generators to each load bus for load shedding simulation.
+        Each virtual generator is assigned a high cost to ensure it is only used as a last resort.
+        """
         net1 = net.deepcopy()
         load_bus = net1.load.iloc[:]['bus']
         NoGen = len(net1.sgen)
@@ -240,11 +250,14 @@ class NetworkClass:
 
         try:
             pp.rundcopp(net1)
-            print('Add vt_gen OPF:',net1.OPF_converged)
-
-        except:
-            print('failed to converge')
-        
+            converged = net1.OPF_converged
+            print(f"\nOPF calculation complete. Converged: {converged}")
+            if converged:
+                print("✅ DC OPF converged successfully with virtual generators.")
+            else:
+                print("❌ DC OPF did not converge. Please check the network configuration.")
+        except Exception as e:
+            print(f"❌ DC OPF failed to converge. Error: {e}")
         return net1
     
     def _load_line_status(self, filename):
