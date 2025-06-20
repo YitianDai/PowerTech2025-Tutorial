@@ -410,7 +410,9 @@ class WindClass:
             dist_hr =  ws_v_hr[hr-1]*1000
             brg_hr = self._getBearing(dir_lon[hr - 1], dir_lat[hr - 1], dir_lon[hr], dir_lat[hr])
             path_ws[hr] = self._getDestination(path_ws[hr - 1][0], path_ws[hr - 1][1], brg_hr, dist_hr)
-        
+            if path_ws[hr][0] < Lon2 - 0.5:
+                path_ws = path_ws[:hr + 1]  # Trim excess
+                break
         return path_ws
 
     def _crt_ws_v(self, lim_v_ws, Num_hrs):
@@ -710,6 +712,8 @@ class WindClass:
             # Plot storm path up to current hour
             x_path.append(path_ws[i][0])
             y_path.append(path_ws[i][1])
+            x_coords = [pt[0] for pt in path_ws]
+            y_coords = [pt[1] for pt in path_ws]
             ax.plot(x_path, y_path, 'o-', color='tab:blue', alpha=0.7, markersize=2, zorder=8, label='Storm Path')
 
             # Calculate new affected and failed lines
@@ -793,8 +797,7 @@ class WindClass:
                             [bus_coords.at[f, "y"], bus_coords.at[t, "y"]],
                             color='red', lw=2.8, alpha=1, zorder=11)
 
-            ax.set(xlim=(-104, -95), ylim=(27, 34), xlabel="Longitude", ylabel="Latitude")
-            ax.set_aspect('equal')
+            ax.set(xlim=(math.floor(min(x_coords)), math.ceil(max(x_coords))), ylim=(math.floor(min(y_coords)), math.ceil(max(y_coords))), xlabel="Longitude", ylabel="Latitude")
             ax.set_title(f"Hour {i+1} | Orange: Newly affected | Red: Newly failed")
             ax.axis('off')  # Cleaner look
 

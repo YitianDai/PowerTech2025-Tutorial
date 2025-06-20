@@ -200,9 +200,12 @@ class NetworkClass:
         Returns combined results for all islands.
         """
         net_opf = net.deepcopy()
-
+        results = net.deepcopy()
         islands = self._find_islands(net_opf)
-        results = net_opf.deepcopy()
+
+        for key in ['res_bus', 'res_line', 'res_trafo', 'res_sgen', 'res_ext_grid', 'res_load']:
+            if hasattr(results, key):
+                setattr(results, key, getattr(results, key).iloc[0:0])  # clear the table safely
 
         for i, island in enumerate(islands):
             npc = net_opf.deepcopy()
@@ -211,24 +214,32 @@ class NetworkClass:
             all_bus_indices = set(npc.bus.index)
             buses_to_remove = list(all_bus_indices - bus_indices_to_keep)
             pp.drop_buses(npc, buses_to_remove)
+            if len(npc.load) == 0:
+                continue
+   
+            if len(npc.ext_grid) == 0:
+                slack_bus_idx = npc.sgen.iloc[0]['bus']
+                pp.create_ext_grid(npc, bus=slack_bus_idx, vm_pu=1.0, name="Slack Bus", max_p_mw=npc.sgen.iloc[0]['max_p_mw'])
 
-            if len(npc.load) > 0:
-                # Check if there is any slack bus in the network
-                if len(npc.ext_grid) == 0:
-                    slack_bus_idx = npc.sgen.iloc[0]['bus']
-                    pp.create_ext_grid(npc, bus=slack_bus_idx, vm_pu=1.0, name="Slack Bus", max_p_mw=npc.sgen.iloc[0]['max_p_mw'])
+            try:
+                pp.rundcopp(npc)
+                for res_key in ['res_bus', 'res_line', 'res_trafo', 'res_sgen', 'res_ext_grid', 'res_load']:
+                    if hasattr(npc, res_key):
+                        npc_result = getattr(npc, res_key)
+                        if not npc_result.empty:
+                            if getattr(results, res_key).empty:
+                                setattr(results, res_key, npc_result.copy())
+                            else:
+                                updated = pd.concat([getattr(results, res_key), npc_result])
+                                setattr(results, res_key, updated)
+            except Exception as e:
+                # Fail-safe: set all static generators to max output
+                for i, sgen in npc.sgen.iterrows():
+                    bus_idx = sgen['bus']
+                    p_max = sgen.get('max_p_mw', sgen['p_mw'])
+                    res_row = pd.DataFrame([[bus_idx, p_max]], columns=['bus', 'p_mw'], index=[i])
+                    results.res_sgen = pd.concat([results.res_sgen, res_row])
 
-                try:
-                    pp.rundcopp(npc, verbose=False)
-                except:
-                    pass
-                    
-                indices = ['res_bus', 'res_line', 'res_trafo', 'res_sgen', 'res_ext_grid', 'res_load']
-                for index in indices:
-                    res_idx = getattr(npc, index).index
-                    getattr(results, index).loc[res_idx] = getattr(npc, index).loc[res_idx]
-            # else:
-            #     print("No load found\n")
         return results
 
     def _add_virtual_gen(self, net):
