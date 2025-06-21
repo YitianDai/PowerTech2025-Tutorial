@@ -12,7 +12,7 @@ This hands-on tutorial provides a complete workflow for assessing the resilience
 * Applying fragility models to determine component failure probabilities.
 * Running Monte Carlo simulations and DC Optimal Power Flow (DC-OPF).
 * Quantifying resilience using metrics like Energy Not Supplied (ENS).
-* Modeling and evaluating the impact of distribution-side flexibility.
+* Modeling and evaluating the impact of distribution network and demand-side flexibility.
 
 ---
 
@@ -27,7 +27,7 @@ This tutorial is designed to be run in a live, interactive environment using Bin
 1.  Click the **"Launch Binder"** badge above.
 2.  Binder will build the necessary environment. This may take a few minutes on the first launch.
 3.  Once ready, a Jupyter interface will open in your browser.
-4.  Open the notebooks in the following order, starting with `SE01`.
+4.  Open the notebooks, starting with `SE01`.
 
 ### Alternative: Local Jupyter Environment
 
